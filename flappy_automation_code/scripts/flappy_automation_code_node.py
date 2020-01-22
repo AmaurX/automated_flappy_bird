@@ -134,10 +134,11 @@ class Obstacle():
         #       (self.gapHeightFilter.estimate, self.gapHeightFilter.P))
 
 
+
 class FlappyController():
     def __init__(self):
         self.state = State()
-        self.discretizationFactor = 40
+        self.discretizationFactor = 50
         self.firstObstacle = Obstacle("first_obstacle", self.discretizationFactor)
         self.secondObstacle = Obstacle("second_obstacle", self.discretizationFactor)
         self.hasSetInitialState = False
@@ -264,20 +265,21 @@ class FlappyController():
         # line1.set_ydata(y_data)
         plt.clf()
         axes = plt.gca()
-        axes.set_xlim([-0.4, 6.0])
+        axes.set_xlim([-0.4, 4.0])
         axes.set_ylim([-0.1, 4.2])
 
-        x_first_obstacle = self.firstObstacle.x.estimate * np.ones(self.discretizationFactor)
-        y_first_obstacle = [(i + 0.5) * CEILING/self.discretizationFactor for i in range(self.discretizationFactor)]
         
         
-        mini, maxi = np.min(self.firstObstacle.gapHeightFilter.voteArray) , np.max(self.firstObstacle.gapHeightFilter.voteArray)
-        diff = maxi - mini
-        new_array = self.firstObstacle.gapHeightFilter.voteArray - mini 
-        new_array /= float(diff)
-        print(self.firstObstacle.gapHeightFilter.voteArray)
-        print(new_array)
-        plt.scatter(x_first_obstacle,y_first_obstacle, c=cm.gist_yarg(new_array), edgecolor='none')
+        for obstacle in [self.firstObstacle, self.secondObstacle]:
+            x__obstacle = obstacle.x.estimate * np.ones(self.discretizationFactor)
+            y__obstacle = [(i + 0.5) * CEILING/self.discretizationFactor for i in range(self.discretizationFactor)]
+            mini, maxi = np.min(obstacle.gapHeightFilter.voteArray) , np.max(obstacle.gapHeightFilter.voteArray)
+            diff = maxi - mini
+            new_array = obstacle.gapHeightFilter.voteArray - mini 
+            new_array /= float(diff)
+            print(obstacle.gapHeightFilter.voteArray)
+            print(new_array)
+            plt.scatter(x__obstacle,y__obstacle, c=cm.gist_yarg(new_array), edgecolor='none')
         
         plt.plot(x_data, y_data, "b.")
         plt.show(block=False)
