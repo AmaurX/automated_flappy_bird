@@ -59,35 +59,36 @@ class GapTracker():
     def __init__(self, discretizationFactor):
         self.voteArray = np.zeros(discretizationFactor)
         self.estimate = CEILING / 2.0
+        self.discretizationFactor = discretizationFactor
 
     def addHit(self, height, uncertainty):
-        index = int(height/CEILING * discretizationFactor)
-        if(index >= discretizationFactor):
+        index = int(height/CEILING * self.discretizationFactor)
+        if(index >= self.discretizationFactor):
             print("height is bigger than ceiling...")
         else:
             self.voteArray[index] += 4
             if(index -1 >= 0):
                 self.voteArray[index-1] += 2
-            if(index + 1 < discretizationFactor):
+            if(index + 1 < self.discretizationFactor):
                 self.voteArray[index+1] += 2
         self.updateGapHeightEstimate()
 
     
     def addMiss(self, height, uncertainty):
-        index = int(height/CEILING * discretizationFactor)
-        if(index >= discretizationFactor):
+        index = int(height/CEILING * self.discretizationFactor)
+        if(index >= self.discretizationFactor):
             print("height is bigger than ceiling...")
         else:
             self.voteArray[index] -= 3
             if(index -1 >= 0):
                 self.voteArray[index-1] -= 1
-            if(index + 1 < discretizationFactor):
+            if(index + 1 < self.discretizationFactor):
                 self.voteArray[index+1] -= 1
         self.updateGapHeightEstimate()
 
     def updateGapHeightEstimate(self):
         minIndex = np.argmin(self.voteArray)
-        self.estimate = (minIndex + 0.5) * CEILING / discretizationFactor
+        self.estimate = (minIndex + 0.5) * CEILING / self.discretizationFactor
 
 class Obstacle():
     def __init__(self, name):
