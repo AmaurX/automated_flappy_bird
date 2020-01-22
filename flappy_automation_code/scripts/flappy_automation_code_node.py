@@ -20,7 +20,7 @@ ACCYLIMIT = 35.0
 VELLIMIT = 10.0 / (SCALING*FPS)
 
 CEILING = 3.90
-OBSTACLE_WIDTH = 0.40
+OBSTACLE_WIDTH = 0.30
 
 class State():
     def __init__(self):
@@ -91,9 +91,9 @@ class GapTracker():
         self.estimate = (minIndex + 0.5) * CEILING / self.discretizationFactor
 
 class Obstacle():
-    def __init__(self, name):
+    def __init__(self, name, discretizationFactor):
         self.x = Kalman1D(5.0)
-        self.gapHeightFilter = GapTracker(50)
+        self.gapHeightFilter = GapTracker(discretizationFactor)
         self.isSeen = False
         self.name = name
         self.x_publisher = rospy.Publisher(
@@ -124,8 +124,9 @@ class Obstacle():
 class FlappyController():
     def __init__(self):
         self.state = State()
-        self.firstObstacle = Obstacle("first_obstacle")
-        self.secondObstacle = Obstacle("second_obstacle")
+        self.discretizationFactor = 50
+        self.firstObstacle = Obstacle("first_obstacle", self.discretizationFactor)
+        self.secondObstacle = Obstacle("second_obstacle", self.discretizationFactor)
         self.hasSetInitialState = False
 
     def initNode(self):
@@ -152,7 +153,7 @@ class FlappyController():
             self.firstObstacle.gapHeightFilter = self.secondObstacle.gapHeightFilter
             self.firstObstacle.isSeen = self.secondObstacle.isSeen
             self.secondObstacle.x = Kalman1D(5.0)
-            self.secondObstacle.gapHeightFilter = GapTracker(50)
+            self.secondObstacle.gapHeightFilter = GapTracker(self.discretizationFactor)
             self.secondObstacle.isSeen = False
 
         x = 0
