@@ -6,7 +6,8 @@ from geometry_msgs.msg import Vector3
 import math
 from std_msgs.msg import Float32
 import matplotlib.pyplot as plt
-from scipy.ndimage.filters import gaussian_filter
+from scipy.ndimage.filters import gaussian_filter1d
+from scipy.ndimage.filters import median_filter
 from matplotlib import cm
 
 
@@ -29,6 +30,8 @@ OBSTACLE_WIDTH = 0.30
 class State():
     def __init__(self):
         self.y = SCALING * SCREENHEIGHT/2.0
+        self.vy = 0.0
+        self.vx = 0.0
         self.yPublisher = rospy.Publisher("/flappy_y_position",
                                           Float32, queue_size=1)
 
@@ -70,11 +73,13 @@ class GapTracker():
         if(index >= self.discretizationFactor):
             print("height is bigger than ceiling...")
         else:
-            self.voteArray[index] += 1
+            self.voteArray[index] += 10
             if(index -1 >= 0):
-                self.voteArray[index-1] += 0
+                self.voteArray[index-1] += 2
             if(index + 1 < self.discretizationFactor):
-                self.voteArray[index+1] += 0
+                self.voteArray[index+1] += 2
+        self.voteArray[0] += 0
+        self.voteArray[-1] +=0
         self.updateGapHeightEstimate()
 
     
@@ -83,16 +88,19 @@ class GapTracker():
         if(index >= self.discretizationFactor):
             print("height is bigger than ceiling...")
         else:
-            self.voteArray[index] -= 1
+            self.voteArray[index] -= 5
             if(index -1 >= 0):
-                self.voteArray[index-1] -= 0
+                self.voteArray[index-1] -= 1
             if(index + 1 < self.discretizationFactor):
-                self.voteArray[index+1] -= 0
+                self.voteArray[index+1] -= 1
+        
         self.updateGapHeightEstimate()
 
     def updateGapHeightEstimate(self):
-        # blurred = gaussian_filter(a, sigma=1)
+        # self.voteArray /= 0.05 * np.linalg.norm(self.voteArray)
+        median_filter(self.voteArray, size=5, output=self.voteArray, mode="constant", cval=np.max(self.voteArray))
         minIndex = np.argmin(self.voteArray)
+
         self.estimate = (minIndex + 0.5) * CEILING / self.discretizationFactor
 
 class Obstacle():
@@ -129,7 +137,7 @@ class Obstacle():
 class FlappyController():
     def __init__(self):
         self.state = State()
-        self.discretizationFactor = 25
+        self.discretizationFactor = 40
         self.firstObstacle = Obstacle("first_obstacle", self.discretizationFactor)
         self.secondObstacle = Obstacle("second_obstacle", self.discretizationFactor)
         self.hasSetInitialState = False
@@ -156,6 +164,8 @@ class FlappyController():
         # msg has the format of geometry_msgs::Vector3
         # Example of publishing acceleration command on velocity velCallback
         self.state.updateWithSpeedAndDt(msg.y, 1.0/30.0)
+        self.state.vy = msg.y
+        self.state.vx = msg.x
         self.firstObstacle.updateXPositionWithSpeedAndDt(msg.x, 1.0/30.0)
         self.secondObstacle.updateXPositionWithSpeedAndDt(msg.x, 1.0/30.0)
 
@@ -258,12 +268,12 @@ class FlappyController():
         axes.set_ylim([-0.1, 4.2])
 
         x_first_obstacle = self.firstObstacle.x.estimate * np.ones(self.discretizationFactor)
-        y_first_obstacle = [(i+0.5) * CEILING/self.discretizationFactor for i in range(self.discretizationFactor)]
+        y_first_obstacle = [(i + 0.5) * CEILING/self.discretizationFactor for i in range(self.discretizationFactor)]
         
         
         mini, maxi = np.min(self.firstObstacle.gapHeightFilter.voteArray) , np.max(self.firstObstacle.gapHeightFilter.voteArray)
         diff = maxi - mini
-        new_array = self.firstObstacle.gapHeightFilter.voteArray + mini
+        new_array = self.firstObstacle.gapHeightFilter.voteArray - mini 
         new_array /= float(diff)
         print(self.firstObstacle.gapHeightFilter.voteArray)
         print(new_array)
