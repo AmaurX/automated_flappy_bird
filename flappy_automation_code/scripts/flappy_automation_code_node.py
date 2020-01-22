@@ -9,8 +9,8 @@ import matplotlib.pyplot as plt
 from scipy.ndimage.filters import gaussian_filter1d
 from scipy.ndimage.filters import median_filter
 from matplotlib import cm
-
-
+from planning import Planner
+from filters import GapTracker, Kalman1D
 # Publisher for sending acceleration commands to flappy bird
 pub_acc_cmd = rospy.Publisher('/flappy_acc', Vector3, queue_size=1)
 
@@ -32,94 +32,24 @@ class State():
         self.y = SCALING * SCREENHEIGHT/2.0
         self.vy = 0.0
         self.vx = 0.0
-        self.yPublisher = rospy.Publisher("/flappy_y_position",
-                                          Float32, queue_size=1)
 
     def updateWithSpeedAndDt(self, speed, dt):
         self.y += dt*speed
-        y_msg = Float32()
-        y_msg.data = self.y
-        self.yPublisher.publish(y_msg)
 
     def setInitialState(self, state):
         self.y = state
-        y_msg = Float32()
-        y_msg.data = self.y
-        self.yPublisher.publish(y_msg)
 
-
-class Kalman1D():
-    def __init__(self, initialGuess):
-        self.K = 1.0
-        self.P = 8.0
-        self.estimate = initialGuess
-
-    def update(self, measure, uncertainty):
-        self.K = self.P/(self.P + uncertainty)
-        self.estimate += self.K * (measure - self.estimate)
-        self.P *= (1.0 - self.K)
-
-    def deterministic_predict(self, change):
-        self.estimate += change
-
-class GapTracker():
-    def __init__(self, discretizationFactor):
-        self.voteArray = np.zeros(discretizationFactor)
-        self.estimate = CEILING / 2.0
-        self.discretizationFactor = discretizationFactor
-
-    def addHit(self, height, uncertainty):
-        index = int(height/CEILING * self.discretizationFactor)
-        if(index >= self.discretizationFactor):
-            print("height is bigger than ceiling...")
-        else:
-            self.voteArray[index] += 10
-            if(index -1 >= 0):
-                self.voteArray[index-1] += 2
-            if(index + 1 < self.discretizationFactor):
-                self.voteArray[index+1] += 2
-        self.voteArray[0] += 0
-        self.voteArray[-1] +=0
-        self.updateGapHeightEstimate()
-
-    
-    def addMiss(self, height, uncertainty):
-        index = int(height/CEILING * self.discretizationFactor)
-        if(index >= self.discretizationFactor):
-            print("height is bigger than ceiling...")
-        else:
-            self.voteArray[index] -= 5
-            if(index -1 >= 0):
-                self.voteArray[index-1] -= 1
-            if(index + 1 < self.discretizationFactor):
-                self.voteArray[index+1] -= 1
-        
-        self.updateGapHeightEstimate()
-
-    def updateGapHeightEstimate(self):
-        # self.voteArray /= 0.05 * np.linalg.norm(self.voteArray)
-        median_filter(self.voteArray, size=5, output=self.voteArray, mode="constant", cval=np.max(self.voteArray))
-        minIndex = np.argmin(self.voteArray)
-
-        self.estimate = (minIndex + 0.5) * CEILING / self.discretizationFactor
 
 class Obstacle():
     def __init__(self, name, discretizationFactor):
         self.x = Kalman1D(5.0)
-        self.gapHeightFilter = GapTracker(discretizationFactor)
+        self.gapHeightFilter = GapTracker(discretizationFactor, CEILING)
         self.isSeen = False
         self.name = name
-        self.x_publisher = rospy.Publisher(
-            "/flappy_%s_estimate" % name, Float32, queue_size=10)
-        self.gap_publisher = rospy.Publisher(
-            "/flappy_%s_gap" % name, Float32, queue_size=10)
 
     def updateXPositionWithSpeedAndDt(self, speed, dt):
         if (self.isSeen):
             self.x.deterministic_predict(-dt*speed)
-            x_msg = Float32()
-            x_msg.data = self.x.estimate
-            self.x_publisher.publish(x_msg)
 
     def updateGapPosition(self, position, uncertainty, hit):
         if hit:
@@ -127,9 +57,6 @@ class Obstacle():
         else:
             self.gapHeightFilter.addMiss(position, uncertainty)
 
-        gap_msg = Float32()
-        gap_msg.data = self.gapHeightFilter.estimate
-        self.gap_publisher.publish(gap_msg)
         # print("height of the gap is : %.4f with uncertainty %.4f" %
         #       (self.gapHeightFilter.estimate, self.gapHeightFilter.P))
 
@@ -142,6 +69,7 @@ class FlappyController():
         self.firstObstacle = Obstacle("first_obstacle", self.discretizationFactor)
         self.secondObstacle = Obstacle("second_obstacle", self.discretizationFactor)
         self.hasSetInitialState = False
+        self.planner = Planner(self.state, self.firstObstacle)
 
     def initNode(self):
         # Here we initialize our node running the automation code
@@ -175,9 +103,9 @@ class FlappyController():
             self.firstObstacle.gapHeightFilter = self.secondObstacle.gapHeightFilter
             self.firstObstacle.isSeen = self.secondObstacle.isSeen
             self.secondObstacle.x = Kalman1D(5.0)
-            self.secondObstacle.gapHeightFilter = GapTracker(self.discretizationFactor)
+            self.secondObstacle.gapHeightFilter = GapTracker(self.discretizationFactor, CEILING)
             self.secondObstacle.isSeen = False
-
+        self.planner.plan()
         x = 0
         y = 0
         # print "Y Position: {}".format(self.state.y)
@@ -276,7 +204,8 @@ class FlappyController():
             mini, maxi = np.min(obstacle.gapHeightFilter.voteArray) , np.max(obstacle.gapHeightFilter.voteArray)
             diff = maxi - mini
             new_array = obstacle.gapHeightFilter.voteArray - mini 
-            new_array /= float(diff)
+            if diff !=0:
+                new_array /= float(diff)
             print(obstacle.gapHeightFilter.voteArray)
             print(new_array)
             plt.scatter(x__obstacle,y__obstacle, c=cm.gist_yarg(new_array), edgecolor='none')
