@@ -6,6 +6,9 @@ from geometry_msgs.msg import Vector3
 import math
 from std_msgs.msg import Float32
 import matplotlib.pyplot as plt
+from scipy.ndimage.filters import gaussian_filter
+from matplotlib import cm
+
 
 # Publisher for sending acceleration commands to flappy bird
 pub_acc_cmd = rospy.Publisher('/flappy_acc', Vector3, queue_size=1)
@@ -88,6 +91,7 @@ class GapTracker():
         self.updateGapHeightEstimate()
 
     def updateGapHeightEstimate(self):
+        # blurred = gaussian_filter(a, sigma=1)
         minIndex = np.argmin(self.voteArray)
         self.estimate = (minIndex + 0.5) * CEILING / self.discretizationFactor
 
@@ -252,6 +256,12 @@ class FlappyController():
         axes = plt.gca()
         axes.set_xlim([-0.4, 6.0])
         axes.set_ylim([-0.1, 4.2])
+
+        x_first_obstacle = self.firstObstacle.gapHeightFilter.estimate * np.ones(self.discretizationFactor)
+        y_first_obstacle = [(i+0.5) * CEILING/self.discretizationFactor for i in range(self.discretizationFactor)]
+        
+        plt.scatter(x_first_obstacle,y_first_obstacle, c=cm.hot(self.firstObstacle.gapHeightFilter.voteArray), edgecolor='none')
+        
         plt.plot(x_data, y_data, "b.")
         plt.show(block=False)
         plt.pause(0.01)
