@@ -70,11 +70,11 @@ class GapTracker():
         if(index >= self.discretizationFactor):
             print("height is bigger than ceiling...")
         else:
-            self.voteArray[index] += 4
+            self.voteArray[index] += 1
             if(index -1 >= 0):
-                self.voteArray[index-1] += 2
+                self.voteArray[index-1] += 0
             if(index + 1 < self.discretizationFactor):
-                self.voteArray[index+1] += 2
+                self.voteArray[index+1] += 0
         self.updateGapHeightEstimate()
 
     
@@ -83,11 +83,11 @@ class GapTracker():
         if(index >= self.discretizationFactor):
             print("height is bigger than ceiling...")
         else:
-            self.voteArray[index] -= 3
+            self.voteArray[index] -= 1
             if(index -1 >= 0):
-                self.voteArray[index-1] -= 1
+                self.voteArray[index-1] -= 0
             if(index + 1 < self.discretizationFactor):
-                self.voteArray[index+1] -= 1
+                self.voteArray[index+1] -= 0
         self.updateGapHeightEstimate()
 
     def updateGapHeightEstimate(self):
@@ -129,7 +129,7 @@ class Obstacle():
 class FlappyController():
     def __init__(self):
         self.state = State()
-        self.discretizationFactor = 50
+        self.discretizationFactor = 25
         self.firstObstacle = Obstacle("first_obstacle", self.discretizationFactor)
         self.secondObstacle = Obstacle("second_obstacle", self.discretizationFactor)
         self.hasSetInitialState = False
@@ -264,9 +264,9 @@ class FlappyController():
         mini, maxi = np.min(self.firstObstacle.gapHeightFilter.voteArray) , np.max(self.firstObstacle.gapHeightFilter.voteArray)
         diff = maxi - mini
         new_array = self.firstObstacle.gapHeightFilter.voteArray + mini
-        new_array /= diff
+        new_array /= float(diff)
         
-        plt.scatter(x_first_obstacle,y_first_obstacle, c=cm.hot(new_array), edgecolor='none')
+        plt.scatter(x_first_obstacle,y_first_obstacle, c=cm.gist_yarg(new_array), edgecolor='none')
         
         plt.plot(x_data, y_data, "b.")
         plt.show(block=False)
