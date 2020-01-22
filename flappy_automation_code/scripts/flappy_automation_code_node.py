@@ -257,10 +257,16 @@ class FlappyController():
         axes.set_xlim([-0.4, 6.0])
         axes.set_ylim([-0.1, 4.2])
 
-        x_first_obstacle = self.firstObstacle.gapHeightFilter.estimate * np.ones(self.discretizationFactor)
+        x_first_obstacle = self.firstObstacle.x.estimate * np.ones(self.discretizationFactor)
         y_first_obstacle = [(i+0.5) * CEILING/self.discretizationFactor for i in range(self.discretizationFactor)]
         
-        plt.scatter(x_first_obstacle,y_first_obstacle, c=cm.hot(self.firstObstacle.gapHeightFilter.voteArray), edgecolor='none')
+        
+        mini, maxi = np.min(self.firstObstacle.gapHeightFilter.voteArray) , np.max(self.firstObstacle.gapHeightFilter.voteArray)
+        diff = maxi - mini
+        new_array = self.firstObstacle.gapHeightFilter.voteArray + mini
+        new_array /= diff
+        
+        plt.scatter(x_first_obstacle,y_first_obstacle, c=cm.hot(new_array), edgecolor='none')
         
         plt.plot(x_data, y_data, "b.")
         plt.show(block=False)
