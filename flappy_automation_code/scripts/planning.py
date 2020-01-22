@@ -16,7 +16,6 @@ DEGREE_TO_RAD = 3.1415 / 180.0
 
 class Planner():
     def __init__(self, state, obstacle):
-        self.plan = None
         self.state = state
         self.obstacle = obstacle
         self.approach_angle = 0
@@ -24,7 +23,7 @@ class Planner():
     
     def plan(self):
         if (self.obstacle.x.estimate < DISTANCE_TO_OBSTACLE_THRESHOLD):
-            if self.isAligned()
+            if self.isAligned():
                 self.approach_angle = 0.0
                 self.mode = "PASSING_THROUGH"
 
@@ -44,7 +43,7 @@ class Planner():
         print("approach angle is %.4f" % self.approach_angle)
 
     def isAligned(self):
-        if abs(self.state.y - self.obstacle.gapHeightFilter.estimate) < ESPILON
+        if abs(self.state.y - self.obstacle.gapHeightFilter.estimate) < ESPILON:
             return True
         return False
             
