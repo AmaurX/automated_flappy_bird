@@ -68,5 +68,8 @@ class GapTracker():
         median_filter(self.voteArray, size=5, output=self.voteArray, mode="constant", cval=np.max(self.voteArray))
         
         minIndex = np.argmin(self.voteArray)
-
+        self.findCenterOfGap()
         self.estimate = (minIndex + 0.5) * self.ceiling_height / self.discretizationFactor
+
+    def findCenterOfGap(self):
+        return True
