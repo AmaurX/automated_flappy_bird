@@ -10,6 +10,7 @@ from scipy.ndimage.filters import gaussian_filter1d
 from scipy.ndimage.filters import median_filter
 from matplotlib import cm
 from planning import Planner
+from controller import Controller
 from filters import GapTracker, Kalman1D
 # Publisher for sending acceleration commands to flappy bird
 pub_acc_cmd = rospy.Publisher('/flappy_acc', Vector3, queue_size=1)
@@ -25,7 +26,7 @@ ACCYLIMIT = 35.0
 VELLIMIT = 10.0 / (SCALING*FPS)
 
 CEILING = 3.90
-OBSTACLE_WIDTH = 0.30
+OBSTACLE_WIDTH = 0.20
 
 class State():
     def __init__(self):
@@ -70,6 +71,7 @@ class FlappyController():
         self.secondObstacle = Obstacle("second_obstacle", self.discretizationFactor)
         self.hasSetInitialState = False
         self.planner = Planner(self.state, self.firstObstacle)
+        self.controller = Controller(self.state, self.planner)
 
     def initNode(self):
         # Here we initialize our node running the automation code
@@ -98,7 +100,7 @@ class FlappyController():
         self.firstObstacle.updateXPositionWithSpeedAndDt(msg.x, 1.0/30.0)
         self.secondObstacle.updateXPositionWithSpeedAndDt(msg.x, 1.0/30.0)
 
-        if self.firstObstacle.x.estimate < -0.2:
+        if self.firstObstacle.x.estimate < -0.4:
             self.firstObstacle.x = self.secondObstacle.x
             self.firstObstacle.gapHeightFilter = self.secondObstacle.gapHeightFilter
             self.firstObstacle.isSeen = self.secondObstacle.isSeen
@@ -106,10 +108,10 @@ class FlappyController():
             self.secondObstacle.gapHeightFilter = GapTracker(self.discretizationFactor, CEILING)
             self.secondObstacle.isSeen = False
         self.planner.plan()
-        x = 0
-        y = 0
+
         # print "Y Position: {}".format(self.state.y)
         # print "X position of first obstacle: {}".format(self.firstObstacle.x.estimate)
+        (x,y) = self.controller.giveAcceleration()
         pub_acc_cmd.publish(Vector3(x, y, 0))
 
     def laserScanCallback(self, msg):

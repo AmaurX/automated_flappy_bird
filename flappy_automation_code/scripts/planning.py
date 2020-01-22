@@ -10,7 +10,7 @@ from scipy.ndimage.filters import gaussian_filter1d
 from scipy.ndimage.filters import median_filter
 from matplotlib import cm
 
-DISTANCE_TO_OBSTACLE_THRESHOLD = 0.50
+DISTANCE_TO_OBSTACLE_THRESHOLD = 1.0
 ESPILON = 0.10
 DEGREE_TO_RAD = 3.1415 / 180.0
 
