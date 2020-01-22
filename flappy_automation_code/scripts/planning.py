@@ -27,13 +27,13 @@ class Planner():
         if (self.obstacle.x.estimate < DISTANCE_TO_OBSTACLE_THRESHOLD):
             if self.isAligned():
                 self.approach_angle = 0.0
-                if self.obstacle.x.estimate < DISTANCE_TO_OBSTACLE_THRESHOLD/5.0:
+                if self.obstacle.x.estimate < DISTANCE_TO_OBSTACLE_THRESHOLD/4.0:
                     self.mode = "IS_PASSING"
                 else:
                     self.mode = "PASSING_THROUGH"
 
             else:
-                if self.obstacle.x.estimate < DISTANCE_TO_OBSTACLE_THRESHOLD/7.0:
+                if self.obstacle.x.estimate < DISTANCE_TO_OBSTACLE_THRESHOLD/6.0:
                     self.mode = "IS_PASSING"
                 if self.mode == "IS_PASSING":
                     self.approach_angle = 0.0

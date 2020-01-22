@@ -22,15 +22,15 @@ class Controller():
         # currentSpeed = np.linalg.norm([self.state.vy, self.state.vx])
 
         diff = desiredAngle - currentAngle
-        currentSpeed = 2.5
+        currentSpeed = 2.2
         if self.planner.mode != "IS_PASSING" and self.planner.obstacle.x.estimate - 0.1 >= 0.0:
-            currentSpeed *= 1 - 0.3/(0.9+self.planner.obstacle.x.estimate)
+            currentSpeed *= 1 - 0.4/(0.9+self.planner.obstacle.x.estimate)
 
         desiredVx = math.cos(desiredAngle) * currentSpeed
         desiredVy = math.sin(desiredAngle) * currentSpeed
         diffvy = desiredVy - self.state.vy
         diffvx = desiredVx - self.state.vx
         if(self.planner.mode == "RECTIFICATION"):
-            return (150000000000000 * diffvx, 80 * diffvy)
+            return (15000000 * diffvx, 50 * diffvy)
         else:
-            return (15000000 * diffvx, 40 * diffvy)
+            return (15000000 * diffvx, 50 * diffvy)
