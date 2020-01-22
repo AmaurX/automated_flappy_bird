@@ -25,14 +25,21 @@ class Planner():
         if (self.obstacle.x.estimate < DISTANCE_TO_OBSTACLE_THRESHOLD):
             if self.isAligned():
                 self.approach_angle = 0.0
-                self.mode = "PASSING_THROUGH"
+                if self.mode == "PASSING_TRHOUGH":
+                    self.mode = "IS_PASSING"
+                else:
+                    self.mode = "PASSING_THROUGH"
 
             else:
-                if self.state.y - self.obstacle.gapHeightFilter.estimate > 0.0:
-                    self.approach_angle = -90.0 * DEGREE_TO_RAD
+                if self.mode == "IS_PASSING":
+                    self.approach_angle = 0.0
+
                 else:
-                    self.approach_angle =  90.0 * DEGREE_TO_RAD
-                self.mode = "RECTIFICATION"
+                    if self.state.y - self.obstacle.gapHeightFilter.estimate > 0.0:
+                        self.approach_angle = -90.0 * DEGREE_TO_RAD
+                    else:
+                        self.approach_angle =  90.0 * DEGREE_TO_RAD
+                    self.mode = "RECTIFICATION"
         else:
             x = self.obstacle.x.estimate - DISTANCE_TO_OBSTACLE_THRESHOLD
             y = self.obstacle.gapHeightFilter.estimate - self.state.y 

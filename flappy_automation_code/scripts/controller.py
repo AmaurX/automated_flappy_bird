@@ -19,12 +19,15 @@ class Controller():
         desiredAngle = self.planner.approach_angle
         currentAngle = math.atan2(self.state.vy, self.state.vx)
         # currentSpeed = np.linalg.norm([self.state.vy, self.state.vx])
-        currentSpeed = 1.5
+        currentSpeed = 1.8
         diff = desiredAngle - currentAngle
 
         desiredVx = math.cos(desiredAngle) * currentSpeed
         desiredVy = math.sin(desiredAngle) * currentSpeed
         diffvy = desiredVy - self.state.vy
         diffvx = desiredVx - self.state.vx
+        if(self.planner.mode == "RECTIFICATION"):
+            return (150* diffvx,150* diffvy)
+        else:
+            return (15* diffvx,15* diffvy)
 
-        return (10* diffvx,10* diffvy)
