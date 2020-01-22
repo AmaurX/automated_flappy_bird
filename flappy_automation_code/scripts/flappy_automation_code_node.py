@@ -170,7 +170,7 @@ class FlappyController():
         x = 0
         y = 0
         # print "Y Position: {}".format(self.state.y)
-        print "X position of first obstacle: {}".format(self.firstObstacle.x.estimate)
+        # print "X position of first obstacle: {}".format(self.firstObstacle.x.estimate)
         pub_acc_cmd.publish(Vector3(x, y, 0))
 
     def laserScanCallback(self, msg):
@@ -265,7 +265,8 @@ class FlappyController():
         diff = maxi - mini
         new_array = self.firstObstacle.gapHeightFilter.voteArray + mini
         new_array /= float(diff)
-        
+        print(self.firstObstacle.gapHeightFilter.voteArray)
+        print(new_array)
         plt.scatter(x_first_obstacle,y_first_obstacle, c=cm.gist_yarg(new_array), edgecolor='none')
         
         plt.plot(x_data, y_data, "b.")
