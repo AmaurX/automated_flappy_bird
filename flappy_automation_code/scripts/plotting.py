@@ -63,6 +63,7 @@ def main():
 
     line1 = []
     while not rospy.is_shutdown():
+        print("stuf")
         line1 = plot_all(line1)
         rate.sleep()
 

@@ -4,7 +4,6 @@ import numpy as np
 from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import Vector3
 import math
-import matplotlib.pyplot as plt
 from std_msgs.msg import Float32
 
 # Publisher for sending acceleration commands to flappy bird
@@ -21,7 +20,7 @@ ACCYLIMIT = 35.0
 VELLIMIT = 10.0 / (SCALING*FPS)
 
 CEILING = 3.90
-
+OBSTACLE_WIDTH = 0.40
 
 class State():
     def __init__(self):
@@ -56,11 +55,44 @@ class Kalman1D():
     def deterministic_predict(self, change):
         self.estimate += change
 
+class GapTracker():
+    def __init__(self, discretizationFactor):
+        self.voteArray = np.zeros(discretizationFactor)
+        self.estimate = CEILING / 2.0
+
+    def addHit(self, height, uncertainty):
+        index = int(height/CEILING * discretizationFactor)
+        if(index >= discretizationFactor):
+            print("height is bigger than ceiling...")
+        else:
+            self.voteArray[index] += 4
+            if(index -1 >= 0):
+                self.voteArray[index-1] += 2
+            if(index + 1 < discretizationFactor):
+                self.voteArray[index+1] += 2
+        self.updateGapHeightEstimate()
+
+    
+    def addMiss(self, height, uncertainty):
+        index = int(height/CEILING * discretizationFactor)
+        if(index >= discretizationFactor):
+            print("height is bigger than ceiling...")
+        else:
+            self.voteArray[index] -= 3
+            if(index -1 >= 0):
+                self.voteArray[index-1] -= 1
+            if(index + 1 < discretizationFactor):
+                self.voteArray[index+1] -= 1
+        self.updateGapHeightEstimate()
+
+    def updateGapHeightEstimate(self):
+        minIndex = np.argmin(self.voteArray)
+        self.estimate = (minIndex + 0.5) * CEILING / discretizationFactor
 
 class Obstacle():
     def __init__(self, name):
         self.x = Kalman1D(5.0)
-        self.gapHeightFilter = Kalman1D(SCALING * 0.4 * SCREENHEIGHT)
+        self.gapHeightFilter = GapTracker(50)
         self.isSeen = False
         self.name = name
         self.x_publisher = rospy.Publisher(
@@ -75,9 +107,11 @@ class Obstacle():
             x_msg.data = self.x.estimate
             self.x_publisher.publish(x_msg)
 
-    def updateGapPosition(self, position, uncertainty):
-        self.isSeen = True
-        self.gapHeightFilter.update(position, uncertainty)
+    def updateGapPosition(self, position, uncertainty, hit):
+        if hit:
+            self.gapHeightFilter.addHit(position, uncertainty)
+        else:
+            self.gapHeightFilter.addMiss(position, uncertainty)
 
         gap_msg = Float32()
         gap_msg.data = self.gapHeightFilter.estimate
@@ -86,14 +120,12 @@ class Obstacle():
         #       (self.gapHeightFilter.estimate, self.gapHeightFilter.P))
 
 
-class Controller():
+class FlappyController():
     def __init__(self):
         self.state = State()
         self.firstObstacle = Obstacle("first_obstacle")
         self.secondObstacle = Obstacle("second_obstacle")
         self.hasSetInitialState = False
-        self.fig = plt.figure()
-        self.ax = self.fig.add_subplot(1, 1, 1)
 
     def initNode(self):
         # Here we initialize our node running the automation code
@@ -119,8 +151,7 @@ class Controller():
             self.firstObstacle.gapHeightFilter = self.secondObstacle.gapHeightFilter
             self.firstObstacle.isSeen = self.secondObstacle.isSeen
             self.secondObstacle.x = Kalman1D(5.0)
-            self.secondObstacle.gapHeightFilter = Kalman1D(
-                SCALING * 0.4 * SCREENHEIGHT)
+            self.secondObstacle.gapHeightFilter = GapTracker(50)
             self.secondObstacle.isSeen = False
 
         x = 0
@@ -159,31 +190,41 @@ class Controller():
                     pass
                 else:
                     if distance < 0.5 + self.firstObstacle.x.estimate:
-                        self.firstObstacle.x.update(distance, 0.15)
+                        # Update obstacle distance
+                        self.firstObstacle.x.update(distance + OBSTACLE_WIDTH/2.0, 0.15)
                         self.firstObstacle.isSeen = True
+                        
+                        # Update Gap tracker
+                        heightOfTheHit = self.state.y + self.firstObstacle.x.estimate * math.tan(angle)
+                        self.firstObstacle.updateGapPosition(
+                            heightOfTheHit, 10 * self.firstObstacle.x.estimate * self.firstObstacle.x.estimate, True)
                     else:
-                        self.secondObstacle.x.update(distance, 0.15)
+                        self.secondObstacle.x.update(distance + OBSTACLE_WIDTH/2.0, 0.15)
                         self.secondObstacle.isSeen = True
+                                                # Update Gap tracker
+                        heightOfTheHit = self.state.y + self.secondObstacle.x.estimate * math.tan(angle)
+                        self.secondObstacle.updateGapPosition(
+                            heightOfTheHit, 10 * self.secondObstacle.x.estimate * self.secondObstacle.x.estimate, True)
             else:
                 if self.firstObstacle.isSeen and distance > self.firstObstacle.x.estimate:
                     # Then it sees through a gap
                     heightOfTheGap = self.state.y + \
                         self.firstObstacle.x.estimate * math.tan(angle)
                     self.firstObstacle.updateGapPosition(
-                        heightOfTheGap, 10 * self.firstObstacle.x.estimate * self.firstObstacle.x.estimate)
+                        heightOfTheGap, 10 * self.firstObstacle.x.estimate * self.firstObstacle.x.estimate, False)
                     # print "Laser range: {}, angle: {}".format(msg.ranges[0], msg.angle_min)
                 if self.secondObstacle.isSeen and distance > self.secondObstacle.x.estimate:
-                                # Then it sees through a gap
+                    # Then it sees through a gap
                     heightOfTheGap = self.state.y + \
                         self.secondObstacle.x.estimate * math.tan(angle)
                     self.secondObstacle.updateGapPosition(
-                        heightOfTheGap, 10 * self.secondObstacle.x.estimate * self.secondObstacle.x.estimate)
+                        heightOfTheGap, 10 * self.secondObstacle.x.estimate * self.secondObstacle.x.estimate, False)
                     # print "Laser range: {}, angle: {}".format(msg.ranges[0], msg.angle_min)
 
 
 if __name__ == '__main__':
     try:
-        controller = Controller()
-        controller.initNode()
+        flappyController = FlappyController()
+        flappyController.initNode()
     except rospy.ROSInterruptException:
         pass
