@@ -27,7 +27,7 @@ class Controller():
         diffvy = desiredVy - self.state.vy
         diffvx = desiredVx - self.state.vx
         if(self.planner.mode == "RECTIFICATION"):
-            return (150* diffvx,150* diffvy)
+            return (150* diffvx,30* diffvy)
         else:
             return (15* diffvx,15* diffvy)
 
