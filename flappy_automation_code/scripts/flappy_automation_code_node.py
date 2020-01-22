@@ -5,6 +5,7 @@ from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import Vector3
 import math
 from std_msgs.msg import Float32
+import matplotlib.pyplot as plt
 
 # Publisher for sending acceleration commands to flappy bird
 pub_acc_cmd = rospy.Publisher('/flappy_acc', Vector3, queue_size=1)
@@ -139,7 +140,13 @@ class FlappyController():
                          self.laserScanCallback)
 
         # Ros spin to prevent program from exiting
-        rospy.spin()
+        rate = rospy.Rate(30)
+
+        line1 = []
+        while not rospy.is_shutdown():
+            # print("stuf")
+            line1 = self.plot_all(line1)
+            rate.sleep()
 
     def velCallback(self, msg):
         # msg has the format of geometry_msgs::Vector3
@@ -222,7 +229,33 @@ class FlappyController():
                     self.secondObstacle.updateGapPosition(
                         heightOfTheGap, 10 * self.secondObstacle.x.estimate * self.secondObstacle.x.estimate, False)
                     # print "Laser range: {}, angle: {}".format(msg.ranges[0], msg.angle_min)
+    
+    def plot_all(self, line1):
+        x_data = [0.0,
+                self.firstObstacle.x.estimate,
+                self.secondObstacle.x.estimate]
+        y_data = [self.state.y, self.firstObstacle.gapHeightFilter.estimate, self.secondObstacle.gapHeightFilter.estimate]
+        # if line1 == []:
+        plt.ion()
+        # fig = plt.figure(figsize=(13, 6))
+        # ax = fig.add_subplot(111)
+        # # create a variable for the line so we can later update it
+        # line1, = ax.plot(x_data, y_data, "bo")
+        # # update plot label/title
+        # # plt.ylabel('Y Label')
+        # # plt.title('Title: {}'.format(identifier))
+        # plt.show()
 
+        # line1.set_xdata(x_data)
+        # line1.set_ydata(y_data)
+        plt.clf()
+        axes = plt.gca()
+        axes.set_xlim([-0.4, 6.0])
+        axes.set_ylim([-0.1, 4.2])
+        plt.plot(x_data, y_data, "b.")
+        plt.show(block=False)
+        plt.pause(0.01)
+        return line1
 
 if __name__ == '__main__':
     try:
