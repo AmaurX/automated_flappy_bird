@@ -26,7 +26,7 @@ ACCYLIMIT = 35.0
 VELLIMIT = 10.0 / (SCALING*FPS)
 
 CEILING = 3.90
-OBSTACLE_WIDTH = 0.20
+OBSTACLE_WIDTH = 0.10
 
 class State():
     def __init__(self):
@@ -70,7 +70,7 @@ class FlappyController():
         self.firstObstacle = Obstacle("first_obstacle", self.discretizationFactor)
         self.secondObstacle = Obstacle("second_obstacle", self.discretizationFactor)
         self.hasSetInitialState = False
-        self.planner = Planner(self.state, self.firstObstacle)
+        self.planner = Planner(self.state, self.firstObstacle, CEILING)
         self.controller = Controller(self.state, self.planner)
 
     def initNode(self):
@@ -100,7 +100,7 @@ class FlappyController():
         self.firstObstacle.updateXPositionWithSpeedAndDt(msg.x, 1.0/30.0)
         self.secondObstacle.updateXPositionWithSpeedAndDt(msg.x, 1.0/30.0)
 
-        if self.firstObstacle.x.estimate < -0.4:
+        if self.firstObstacle.x.estimate < -0.25:
             self.firstObstacle.x = self.secondObstacle.x
             self.firstObstacle.gapHeightFilter = self.secondObstacle.gapHeightFilter
             self.firstObstacle.isSeen = self.secondObstacle.isSeen
@@ -145,7 +145,7 @@ class FlappyController():
                 else:
                     if distance < 0.5 + self.firstObstacle.x.estimate:
                         # Update obstacle distance
-                        self.firstObstacle.x.update(distance + OBSTACLE_WIDTH/2.0, 0.15)
+                        self.firstObstacle.x.update(distance + OBSTACLE_WIDTH/2.0, 1.0)
                         self.firstObstacle.isSeen = True
                         
                         # Update Gap tracker
@@ -153,7 +153,7 @@ class FlappyController():
                         self.firstObstacle.updateGapPosition(
                             heightOfTheHit, 10 * self.firstObstacle.x.estimate * self.firstObstacle.x.estimate, True)
                     else:
-                        self.secondObstacle.x.update(distance + OBSTACLE_WIDTH/2.0, 0.15)
+                        self.secondObstacle.x.update(distance + OBSTACLE_WIDTH/2.0, 2.0)
                         self.secondObstacle.isSeen = True
                                                 # Update Gap tracker
                         heightOfTheHit = self.state.y + self.secondObstacle.x.estimate * math.tan(angle)
@@ -174,7 +174,9 @@ class FlappyController():
                     self.secondObstacle.updateGapPosition(
                         heightOfTheGap, 10 * self.secondObstacle.x.estimate * self.secondObstacle.x.estimate, False)
                     # print "Laser range: {}, angle: {}".format(msg.ranges[0], msg.angle_min)
-    
+            self.firstObstacle.gapHeightFilter.endOfPointCloud()
+            self.secondObstacle.gapHeightFilter.endOfPointCloud()
+
     def plot_all(self, line1):
         x_data = [0.0,
                 self.firstObstacle.x.estimate,
@@ -188,12 +190,13 @@ class FlappyController():
         # line1, = ax.plot(x_data, y_data, "bo")
         # # update plot label/title
         # # plt.ylabel('Y Label')
-        # # plt.title('Title: {}'.format(identifier))
         # plt.show()
 
         # line1.set_xdata(x_data)
         # line1.set_ydata(y_data)
         plt.clf()
+        plt.title('Title: {}'.format(self.planner.mode))
+
         axes = plt.gca()
         axes.set_xlim([-0.4, 4.0])
         axes.set_ylim([-0.1, 4.2])
@@ -208,8 +211,8 @@ class FlappyController():
             new_array = obstacle.gapHeightFilter.voteArray - mini 
             if diff !=0:
                 new_array /= float(diff)
-            print(obstacle.gapHeightFilter.voteArray)
-            print(new_array)
+            # print(obstacle.gapHeightFilter.voteArray)
+            # print(new_array)
             plt.scatter(x__obstacle,y__obstacle, c=cm.gist_yarg(new_array), edgecolor='none')
         
         plt.plot(x_data, y_data, "b.")
