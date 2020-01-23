@@ -4,44 +4,55 @@ import numpy as np
 from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import Vector3
 import math
-from std_msgs.msg import Float32
 import matplotlib.pyplot as plt
-from scipy.ndimage.filters import gaussian_filter1d
-from scipy.ndimage.filters import median_filter
 from matplotlib import cm
 from planning import Planner
 from controller import Controller
 from filters import GapTracker, Kalman1D
-# Publisher for sending acceleration commands to flappy bird
-pub_acc_cmd = rospy.Publisher('/flappy_acc', Vector3, queue_size=1)
 
-FPS = 30
-SCREENWIDTH = 432
-SCREENHEIGHT = 512
 
-# scale pixels to meters
-SCALING = 0.01
-ACCXLIMIT = 3.0
-ACCYLIMIT = 35.0
-VELLIMIT = 10.0 / (SCALING*FPS)
+'''
+This is the main file of the automation.
 
-CEILING = 3.90
+It contains three classes:
+
+    - The State class, to track Flappy's state
+    - The Obstacle class, to track the obstacles' states
+    - The AutomatedFlappy class, that is the master class that handles the ROS interface and gives birth to everything else
+
+'''
+
+CEILING = 4.05
 OBSTACLE_WIDTH = 0.10
 
+
 class State():
+    '''
+    Very simple class to store and update the state of Flappy
+    It only consists of y position and Vx and Vy velocities
+    '''
+
     def __init__(self):
-        self.y = SCALING * SCREENHEIGHT/2.0
+        self.y = 2.0
         self.vy = 0.0
         self.vx = 0.0
 
     def updateWithSpeedAndDt(self, speed, dt):
         self.y += dt*speed
 
-    def setInitialState(self, state):
-        self.y = state
+    def setInitialState(self, height):
+        self.y = height
 
 
 class Obstacle():
+    '''
+    A class to represent the obstacles
+
+    It contains:
+        - a x position estimator, that uses a custom 1DKalman filter
+        - a gap height estimator, that uses the GapTracker filter
+    '''
+
     def __init__(self, name, discretizationFactor):
         self.x = Kalman1D(5.0)
         self.gapHeightFilter = GapTracker(discretizationFactor, CEILING)
@@ -52,28 +63,50 @@ class Obstacle():
         if (self.isSeen):
             self.x.deterministic_predict(-dt*speed)
 
+    def updateXPosition(self, position, uncertainty):
+        self.x.update(position, uncertainty)
+
     def updateGapPosition(self, position, uncertainty, hit):
         if hit:
             self.gapHeightFilter.addHit(position, uncertainty)
         else:
             self.gapHeightFilter.addMiss(position, uncertainty)
 
-        # print("height of the gap is : %.4f with uncertainty %.4f" %
-        #       (self.gapHeightFilter.estimate, self.gapHeightFilter.P))
 
+class AutomatedFlappy():
+    '''
+    This is the main class.
 
+    It handles the ROS communication with the game, and stores and manages the different parts of the code:
+        - The perception and state estimation : for Flappy and the obstacles
+        - The planning part
+        - The control part
+    '''
 
-class FlappyController():
     def __init__(self):
+        # Initialize Flappy's state
         self.state = State()
-        self.discretizationFactor = 50
-        self.firstObstacle = Obstacle("first_obstacle", self.discretizationFactor)
-        self.secondObstacle = Obstacle("second_obstacle", self.discretizationFactor)
         self.hasSetInitialState = False
+
+        # Create the two obstacles
+        self.discretizationFactor = 50
+        self.firstObstacle = Obstacle(
+            "first_obstacle", self.discretizationFactor)
+        self.secondObstacle = Obstacle(
+            "second_obstacle", self.discretizationFactor)
+
+        # Create the planner, that needs references to the state and the first obstacle
         self.planner = Planner(self.state, self.firstObstacle, CEILING)
+
+        # Create the controller, that needs references to the planner and to the state
         self.controller = Controller(self.state, self.planner)
 
-    def initNode(self):
+    def flyLikeTheWind(self):
+        '''
+        This is the launch function. It creates the node, the publisher and subscibers,
+        and then it calls the plot function so that the user gets a visual of the perception output 
+        '''
+
         # Here we initialize our node running the automation code
         rospy.init_node('flappy_automation_code', anonymous=True)
 
@@ -82,13 +115,14 @@ class FlappyController():
         rospy.Subscriber("/flappy_laser_scan", LaserScan,
                          self.laserScanCallback)
 
-        # Ros spin to prevent program from exiting
-        rate = rospy.Rate(30)
+        # Create the publisher for acceleration
+        self.pub_acc_cmd = rospy.Publisher(
+            '/flappy_acc', Vector3, queue_size=1)
 
-        line1 = []
+        # For the remainder of the time, we plot the current state and obstacle perception
+        rate = rospy.Rate(30)
         while not rospy.is_shutdown():
-            # print("stuf")
-            line1 = self.plot_all(line1)
+            self.plotPerception()
             rate.sleep()
 
     def velCallback(self, msg):
@@ -105,14 +139,15 @@ class FlappyController():
             self.firstObstacle.gapHeightFilter = self.secondObstacle.gapHeightFilter
             self.firstObstacle.isSeen = self.secondObstacle.isSeen
             self.secondObstacle.x = Kalman1D(5.0)
-            self.secondObstacle.gapHeightFilter = GapTracker(self.discretizationFactor, CEILING)
+            self.secondObstacle.gapHeightFilter = GapTracker(
+                self.discretizationFactor, CEILING)
             self.secondObstacle.isSeen = False
         self.planner.plan()
 
         # print "Y Position: {}".format(self.state.y)
         # print "X position of first obstacle: {}".format(self.firstObstacle.x.estimate)
-        (x,y) = self.controller.giveAcceleration()
-        pub_acc_cmd.publish(Vector3(x, y, 0))
+        (x, y) = self.controller.giveAcceleration()
+        self.pub_acc_cmd.publish(Vector3(x, y, 0))
 
     def laserScanCallback(self, msg):
         # msg has the format of sensor_msgs::LaserScan
@@ -145,18 +180,22 @@ class FlappyController():
                 else:
                     if distance < 0.5 + self.firstObstacle.x.estimate:
                         # Update obstacle distance
-                        self.firstObstacle.x.update(distance + OBSTACLE_WIDTH/2.0, 1.0)
+                        self.firstObstacle.updateXPosition(
+                            distance + OBSTACLE_WIDTH/2.0, 1.0)
                         self.firstObstacle.isSeen = True
-                        
+
                         # Update Gap tracker
-                        heightOfTheHit = self.state.y + self.firstObstacle.x.estimate * math.tan(angle)
+                        heightOfTheHit = self.state.y + \
+                            self.firstObstacle.x.estimate * math.tan(angle)
                         self.firstObstacle.updateGapPosition(
                             heightOfTheHit, 10 * self.firstObstacle.x.estimate * self.firstObstacle.x.estimate, True)
                     else:
-                        self.secondObstacle.x.update(distance + OBSTACLE_WIDTH/2.0, 2.0)
+                        self.secondObstacle.updateXPosition(
+                            distance + OBSTACLE_WIDTH/2.0, 2.0)
                         self.secondObstacle.isSeen = True
-                                                # Update Gap tracker
-                        heightOfTheHit = self.state.y + self.secondObstacle.x.estimate * math.tan(angle)
+                        # Update Gap tracker
+                        heightOfTheHit = self.state.y + \
+                            self.secondObstacle.x.estimate * math.tan(angle)
                         self.secondObstacle.updateGapPosition(
                             heightOfTheHit, 10 * self.secondObstacle.x.estimate * self.secondObstacle.x.estimate, True)
             else:
@@ -177,52 +216,56 @@ class FlappyController():
             self.firstObstacle.gapHeightFilter.endOfPointCloud()
             self.secondObstacle.gapHeightFilter.endOfPointCloud()
 
-    def plot_all(self, line1):
-        x_data = [0.0,
-                self.firstObstacle.x.estimate,
-                self.secondObstacle.x.estimate]
-        y_data = [self.state.y, self.firstObstacle.gapHeightFilter.estimate, self.secondObstacle.gapHeightFilter.estimate]
-        # if line1 == []:
+    def plotPerception(self):
+        # Let plt do dynamic plots
         plt.ion()
-        # fig = plt.figure(figsize=(13, 6))
-        # ax = fig.add_subplot(111)
-        # # create a variable for the line so we can later update it
-        # line1, = ax.plot(x_data, y_data, "bo")
-        # # update plot label/title
-        # # plt.ylabel('Y Label')
-        # plt.show()
-
-        # line1.set_xdata(x_data)
-        # line1.set_ydata(y_data)
+        # Clear current frame
         plt.clf()
-        plt.title('Title: {}'.format(self.planner.mode))
 
+        # Put the title
+        plt.title('Title: {}'.format(self.planner.mode))
+        plt.ylabel('height (in m)')
+        plt.xlabel('distance (in m)')
+
+        # Set the axes limits
         axes = plt.gca()
         axes.set_xlim([-0.4, 4.0])
         axes.set_ylim([-0.1, 4.2])
 
-        
-        
+        # For each obstacle, plot a gray scale of the voteArray. 
+        # The gap corresponds to the white, and the obstacle to the black
         for obstacle in [self.firstObstacle, self.secondObstacle]:
-            x__obstacle = obstacle.x.estimate * np.ones(self.discretizationFactor)
-            y__obstacle = [(i + 0.5) * CEILING/self.discretizationFactor for i in range(self.discretizationFactor)]
-            mini, maxi = np.min(obstacle.gapHeightFilter.voteArray) , np.max(obstacle.gapHeightFilter.voteArray)
+            xObstacle = obstacle.x.estimate * \
+                np.ones(self.discretizationFactor)
+            yObstacle = [
+                (i + 0.5) * CEILING/self.discretizationFactor for i in range(self.discretizationFactor)]
+            mini, maxi = np.min(obstacle.gapHeightFilter.voteArray), np.max(
+                obstacle.gapHeightFilter.voteArray)
             diff = maxi - mini
-            new_array = obstacle.gapHeightFilter.voteArray - mini 
-            if diff !=0:
+            new_array = obstacle.gapHeightFilter.voteArray - mini
+            if diff != 0:
                 new_array /= float(diff)
             # print(obstacle.gapHeightFilter.voteArray)
             # print(new_array)
-            plt.scatter(x__obstacle,y__obstacle, c=cm.gist_yarg(new_array), edgecolor='none')
-        
-        plt.plot(x_data, y_data, "b.")
+            plt.scatter(xObstacle, yObstacle,
+                        c=cm.gist_yarg(new_array), edgecolor='none', label="obstacle")
+
+        xGaps = [self.firstObstacle.x.estimate,
+                  self.secondObstacle.x.estimate]
+        yGaps = [self.firstObstacle.gapHeightFilter.estimate,
+                  self.secondObstacle.gapHeightFilter.estimate]
+        xFlappy = [0.0]
+        yFlappy = [self.state.y] 
+        plt.plot(xFlappy, yFlappy, "bo", label="Flappy")
+        plt.plot(xGaps, yGaps, "go", label="Gaps")
+
         plt.show(block=False)
         plt.pause(0.01)
-        return line1
+
 
 if __name__ == '__main__':
     try:
-        flappyController = FlappyController()
-        flappyController.initNode()
+        automatedFlappy = AutomatedFlappy()
+        automatedFlappy.flyLikeTheWind()
     except rospy.ROSInterruptException:
         pass

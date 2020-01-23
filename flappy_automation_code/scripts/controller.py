@@ -1,36 +1,55 @@
 #!/usr/bin/env python
-import rospy
-import numpy as np
-from sensor_msgs.msg import LaserScan
-from geometry_msgs.msg import Vector3
 import math
-from std_msgs.msg import Float32
-import matplotlib.pyplot as plt
-from scipy.ndimage.filters import gaussian_filter1d
-from scipy.ndimage.filters import median_filter
-from matplotlib import cm
+
+DESIRED_VELOCITY_NORM = 2.2
 
 
 class Controller():
+    '''
+    This controller tracks target velocity values : Vx and Vy
+
+    They are computed from the current state, from the desired velocity norm, and from the desired direction angle given by the planner
+
+    The desired velocity norm is a constant. However, when flappy is closing on the obstacle but not yet commited to pass (e.g. in IS_PASSING mode),
+    we dampen the velocity target by a factor that grows the closer we get to the obstacle. This allows for better final approach when 
+    the estimation of the gap height stabalizes a bit late.
+
+
+
+    The controler is a very simple P controller, with different gain for each part.
+
+    The Kpx controller is huge because thanks to the dynamics of the game, Flappy cannot go backwards.
+    This mean that there can be no oscillation and therefore a very high gain is gonna acheive the goal faster.
+    This also works because there is no uncertainty in the dynamics, the state is always known perfectly.
+
+    For Kpy, there can be oscillation, so this gain is of "normal" magnitude.
+
+    One could try implementing a PI or PID controller, but the game is simple enough that a simple P controller works well.
+    '''
+
     def __init__(self, state, planner):
         self.state = state
         self.planner = planner
+        self.Kpx = 10000000
+        self.Kpy = 50
 
     def giveAcceleration(self):
+        # Getting the target velocity and angle
         desiredAngle = self.planner.approach_angle
-        currentAngle = math.atan2(self.state.vy, self.state.vx)
-        # currentSpeed = np.linalg.norm([self.state.vy, self.state.vx])
+        desiredSpeed = DESIRED_VELOCITY_NORM
 
-        diff = desiredAngle - currentAngle
-        currentSpeed = 2.2
+        # When flappy is closing on the obstacle but not yet commited to pass (e.g. in IS_PASSING mode),
+        # we dampen the velocity target by a factor that grows the closer we get to the obstacle
         if self.planner.mode != "IS_PASSING" and self.planner.obstacle.x.estimate - 0.1 >= 0.0:
-            currentSpeed *= 1 - 0.4/(0.9+self.planner.obstacle.x.estimate)
+            desiredSpeed *= 1 - 0.4/(0.9+self.planner.obstacle.x.estimate)
 
-        desiredVx = math.cos(desiredAngle) * currentSpeed
-        desiredVy = math.sin(desiredAngle) * currentSpeed
+        # Computing the desired Vx annd Vy, that are actually tracked
+        desiredVx = math.cos(desiredAngle) * desiredSpeed
+        desiredVy = math.sin(desiredAngle) * desiredSpeed
+
+        # Computing the diff between desired velocity and current velocity
         diffvy = desiredVy - self.state.vy
         diffvx = desiredVx - self.state.vx
-        if(self.planner.mode == "RECTIFICATION"):
-            return (15000000 * diffvx, 50 * diffvy)
-        else:
-            return (15000000 * diffvx, 50 * diffvy)
+
+        # The controler is a very simple P controller, with different gain for each part
+        return (self.Kpx * diffvx, self.Kpy * diffvy)
