@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import math
 
-DESIRED_VELOCITY_NORM = 2.2
+DESIRED_VELOCITY_NORM = 2.1
 
 
 class Controller():

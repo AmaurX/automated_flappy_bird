@@ -47,7 +47,7 @@ class Planner():
                     self.mode = "PASSING_SOON"
 
             else:
-                if self.obstacle.x.estimate < DISTANCE_TO_OBSTACLE_THRESHOLD/6.0:
+                if self.obstacle.x.estimate < DISTANCE_TO_OBSTACLE_THRESHOLD/5.0:
                     # When Flappy is too close to the obstacle, even if it doesn't believe it is aligned,
                     # the best strategy remains to go forward
                     self.mode = "IS_PASSING"

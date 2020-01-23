@@ -67,10 +67,11 @@ class Obstacle():
         self.x.update(position, uncertainty)
 
     def updateGapPosition(self, position, uncertainty, hit):
-        if hit:
-            self.gapHeightFilter.addHit(position, uncertainty)
-        else:
-            self.gapHeightFilter.addMiss(position, uncertainty)
+        if self.x.estimate > 0.04:
+            if hit:
+                self.gapHeightFilter.addHit(position, uncertainty)
+            else:
+                self.gapHeightFilter.addMiss(position, uncertainty)
 
 
 class AutomatedFlappy():
@@ -114,16 +115,20 @@ class AutomatedFlappy():
         rospy.Subscriber("/flappy_vel", Vector3, self.velCallback)
         rospy.Subscriber("/flappy_laser_scan", LaserScan,
                          self.laserScanCallback)
-
+        plotPerception = rospy.get_param("~plot_perception", default=True)
         # Create the publisher for acceleration
         self.pub_acc_cmd = rospy.Publisher(
             '/flappy_acc', Vector3, queue_size=1)
 
-        # For the remainder of the time, we plot the current state and obstacle perception
-        rate = rospy.Rate(30)
-        while not rospy.is_shutdown():
-            self.plotPerception()
-            rate.sleep()
+        if plotPerception:
+            # For the remainder of the time, we plot the current state and obstacle perception
+
+            rate = rospy.Rate(30)
+            while not rospy.is_shutdown():
+                self.plotPerception()
+                rate.sleep()
+        else:
+            rospy.spin()
 
     def velCallback(self, msg):
         # We do the predict part of our filters, and update the states
@@ -133,7 +138,7 @@ class AutomatedFlappy():
         self.firstObstacle.updateXPositionWithSpeedAndDt(msg.x, 1.0/30.0)
         self.secondObstacle.updateXPositionWithSpeedAndDt(msg.x, 1.0/30.0)
 
-        # When the first obstacle has been passed successfully, we replace the data 
+        # When the first obstacle has been passed successfully, we replace the data
         # of the first by the data of the second, which becomes the first
         # This is how the planner switches back to APPROACH mode
         # A new second obstacle is ready to start estimating
@@ -145,7 +150,7 @@ class AutomatedFlappy():
             self.secondObstacle.gapHeightFilter = GapTracker(
                 self.discretizationFactor, CEILING)
             self.secondObstacle.isSeen = False
-        
+
         # Call the planner
         self.planner.plan()
 
@@ -163,7 +168,7 @@ class AutomatedFlappy():
             distanceToGround = math.fabs(math.sin(angle) * length)
             self.state.setInitialState(distanceToGround)
             self.hasSetInitialState = True
-        
+
         # Then, sort the ray and use them to determine the obstacle distance and the height of the gap
         for i in range(len(msg.intensities)):
             hasHit = bool(msg.intensities[i])
@@ -217,7 +222,7 @@ class AutomatedFlappy():
                         self.firstObstacle.x.estimate * math.tan(angle)
                     self.firstObstacle.updateGapPosition(
                         heightOfTheGap, 10 * self.firstObstacle.x.estimate * self.firstObstacle.x.estimate, False)
-                
+
                 # And we then see if it had enough range to even go through the second obstacle
                 if self.secondObstacle.isSeen and distance > self.secondObstacle.x.estimate:
                     # Then it sees through a gap
@@ -225,7 +230,7 @@ class AutomatedFlappy():
                         self.secondObstacle.x.estimate * math.tan(angle)
                     self.secondObstacle.updateGapPosition(
                         heightOfTheGap, 10 * self.secondObstacle.x.estimate * self.secondObstacle.x.estimate, False)
-            
+
             # At the end of the pointcloud parsing, we signal the gap filters. See filters.py for more info
             self.firstObstacle.gapHeightFilter.endOfPointCloud()
             self.secondObstacle.gapHeightFilter.endOfPointCloud()
@@ -246,7 +251,7 @@ class AutomatedFlappy():
         axes.set_xlim([-0.4, 4.0])
         axes.set_ylim([-0.1, 4.2])
 
-        # For each obstacle, plot a gray scale of the voteArray. 
+        # For each obstacle, plot a gray scale of the voteArray.
         # The gap corresponds to the white, and the obstacle to the black
         for obstacle in [self.firstObstacle, self.secondObstacle]:
             xObstacle = obstacle.x.estimate * \
@@ -265,14 +270,14 @@ class AutomatedFlappy():
 
         # Plot in green the current best estimation of the gaps positions
         xGaps = [self.firstObstacle.x.estimate,
-                  self.secondObstacle.x.estimate]
+                 self.secondObstacle.x.estimate]
         yGaps = [self.firstObstacle.gapHeightFilter.estimate,
-                  self.secondObstacle.gapHeightFilter.estimate]
+                 self.secondObstacle.gapHeightFilter.estimate]
         plt.plot(xGaps, yGaps, "go", label="Gaps")
 
         # Plot the position of Flappy in blue
         xFlappy = [0.0]
-        yFlappy = [self.state.y] 
+        yFlappy = [self.state.y]
         plt.plot(xFlappy, yFlappy, "bo", label="Flappy")
 
         plt.show(block=False)

@@ -120,7 +120,7 @@ class GapTracker():
         Adds the penalty to all unseen indices of the voteArray
         The penalty is quite small compared to a HIT
         '''
-        self.voteArray += 1 * self.unseen
+        self.voteArray += 3 * self.unseen
         self.unseen = np.ones(self.discretizationFactor)
 
     def updateGapHeightEstimate(self):
